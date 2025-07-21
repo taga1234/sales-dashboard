@@ -1,9 +1,17 @@
 from flask import Flask, render_template, request, redirect, url_for
+from supabase import create_client, Client
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+from datetime import datetime
 
 app = Flask(__name__)
+
+# Замени на свои данные из Supabase
+SUPABASE_URL = "https://zehbvjfxjayeovktlpgk.supabase.co"  # Вставь свой URL
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplaGJ2amZ4amF5ZW92a3RscGdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxMDQzMDYsImV4cCI6MjA2ODY4MDMwNn0.RHmXCn4bA21ai_3-mbpKjGMFy9cdYQ5Z9PscvWFLnWU"  # Вставь свой anon key
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Создаем папку static если её нет
 if not os.path.exists('static'):
@@ -11,12 +19,22 @@ if not os.path.exists('static'):
 
 
 def process_data():
-    """Функция для обработки данных и создания графика"""
+    """Функция для обработки данных из Supabase"""
     try:
-        df = pd.read_csv('dashboard_data.csv')
+        # Получаем данные из Supabase
+        response = supabase.table('sales').select("*").execute()
+        data = response.data
+
+        if not data:
+            return {'Сообщение': 'Нет данных о продажах'}
+
+        df = pd.DataFrame(data)
+
+        # Проверяем наличие нужных колонок
         required_columns = {'date', 'product', 'quantity'}
         if not required_columns.issubset(df.columns):
-            return {'Ошибка': 'В файле нет нужных столбцов: date, product, quantity'}
+            return {'Ошибка': 'В таблице нет нужных столбцов: date, product, quantity'}
+
         df['date'] = pd.to_datetime(df['date'])
         df['month'] = df['date'].dt.month
 
@@ -32,13 +50,20 @@ def process_data():
         plt.xlabel('Месяц')
         plt.ylabel('Количество проданных товаров')
         plt.title('Продажи по месяцам')
-        plt.xticks([1, 2, 3], ['Январь', 'Февраль', 'Март'])
+
+        # Определяем подписи месяцев
+        months = {1: 'Янв', 2: 'Фев', 3: 'Мар', 4: 'Апр', 5: 'Май', 6: 'Июн',
+                  7: 'Июл', 8: 'Авг', 9: 'Сен', 10: 'Окт', 11: 'Ноя', 12: 'Дек'}
+        month_labels = [months.get(m, str(m)) for m in monthly_sales.index]
+        plt.xticks(monthly_sales.index, month_labels)
+
         plt.grid(axis='y', alpha=0.3)
         plt.tight_layout()
         plt.savefig('static/sales_by_month.png')
-        plt.close()  # Важно закрыть фигуру
+        plt.close()
 
         return top3_products
+
     except Exception as e:
         return {'Ошибка': str(e)}
 
@@ -49,23 +74,45 @@ def dashboard():
     return render_template('dashboard.html', top_products=top_products)
 
 
-@app.route('/upload', methods=['GET', 'POST'])
-def upload_file():
+@app.route('/add', methods=['GET', 'POST'])
+def add_sale():
     if request.method == 'POST':
-        if 'file' in request.files:
-            file = request.files['file']
-            if file.filename.endswith('.csv'):
-                file.save('dashboard_data.csv')
-                return redirect(url_for('dashboard'))
+        try:
+            sale_data = {
+                'date': request.form['date'],
+                'product': request.form['product'],
+                'quantity': int(request.form['quantity']),
+                'price': float(request.form['price'])
+            }
+
+            supabase.table('sales').insert(sale_data).execute()
+            return redirect(url_for('dashboard'))
+
+        except Exception as e:
+            return f"Ошибка при добавлении: {str(e)}"
+
     return '''
-    <h2>Загрузка новых данных</h2>
-    <form method="post" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".csv">
-        <input type="submit" value="Загрузить">
+    <h2>Добавить продажу</h2>
+    <form method="post">
+        Дата: <input type="date" name="date" required><br><br>
+        Товар: <input type="text" name="product" required><br><br>
+        Количество: <input type="number" name="quantity" min="1" required><br><br>
+        Цена: <input type="number" step="0.01" name="price" min="0" required><br><br>
+        <input type="submit" value="Добавить продажу">
     </form>
     <br>
     <a href="/">← Назад к дашборду</a>
     '''
+
+
+@app.route('/api/sales')
+def api_sales():
+    """API endpoint для получения всех продаж"""
+    try:
+        response = supabase.table('sales').select("*").execute()
+        return {'data': response.data}
+    except Exception as e:
+        return {'error': str(e)}, 500
 
 
 if __name__ == '__main__':
