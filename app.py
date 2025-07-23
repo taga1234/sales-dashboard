@@ -7,9 +7,8 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Замени на свои данные из Supabase
-SUPABASE_URL = "https://zehbvjfxjayeovktlpgk.supabase.co"  # Вставь свой URL
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplaGJ2amZ4amF5ZW92a3RscGdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxMDQzMDYsImV4cCI6MjA2ODY4MDMwNn0.RHmXCn4bA21ai_3-mbpKjGMFy9cdYQ5Z9PscvWFLnWU"  # Вставь свой anon key
+
+
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
